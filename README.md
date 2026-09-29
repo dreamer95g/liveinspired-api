@@ -5,7 +5,7 @@ API REST + GraphQL para la gestión de notas, frases y categorías (tags), con a
 ## 👤 Autor
 
 **Gabry95g**
-- GitHub: [@Gabry95g](https://github.com/Gabry95g)
+- GitHub: [@Gabry95g](https://github.com/dreamer95g)
 
 ## 🛠️ Tecnologías
 
@@ -31,7 +31,7 @@ API REST + GraphQL para la gestión de notas, frases y categorías (tags), con a
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/Gabry95g/liveinspired.git
+git clone https://github.com/dreamer95g/liveinspired-api.git
 cd liveinspired
 ```
 
