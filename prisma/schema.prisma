@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model images {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String    @db.LongText
+  note_id    BigInt?   @db.UnsignedBigInt
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+  notes      notes?    @relation(fields: [note_id], references: [id], onDelete: Cascade, map: "images_note_id_foreign")
+
+  @@index([note_id], map: "images_note_id_foreign")
+}
+
+model note_tag {
+  note_id BigInt @db.UnsignedBigInt
+  tag_id  BigInt @db.UnsignedBigInt
+  notes   notes  @relation(fields: [note_id], references: [id], onDelete: Cascade, map: "note_tag_note_id_foreign")
+  tags    tags   @relation(fields: [tag_id], references: [id], onDelete: Cascade, map: "note_tag_tag_id_foreign")
+
+  @@id([note_id, tag_id])
+  @@index([note_id], map: "note_tag_note_id_foreign")
+  @@index([tag_id], map: "note_tag_tag_id_foreign")
+}
+
+model notes {
+  id         BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  date       DateTime   @db.Date
+  text       String     @db.LongText
+  created_at DateTime?  @db.Timestamp(0)
+  updated_at DateTime?  @db.Timestamp(0)
+  images     images[]
+  note_tag   note_tag[]
+}
+
+model phrase_tag {
+  phrase_id BigInt  @db.UnsignedBigInt
+  tag_id    BigInt  @db.UnsignedBigInt
+  phrases   phrases @relation(fields: [phrase_id], references: [id], onDelete: Cascade, map: "phrase_tag_phrase_id_foreign")
+  tags      tags    @relation(fields: [tag_id], references: [id], onDelete: Cascade, map: "phrase_tag_tag_id_foreign")
+
+  @@id([phrase_id, tag_id])
+  @@index([phrase_id], map: "phrase_tag_phrase_id_foreign")
+  @@index([tag_id], map: "phrase_tag_tag_id_foreign")
+}
+
+model phrases {
+  id         BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  text       String       @db.Text
+  author     String       @db.Text
+  created_at DateTime?    @db.Timestamp(0)
+  updated_at DateTime?    @db.Timestamp(0)
+  phrase_tag phrase_tag[]
+}
+
+model tags {
+  id         BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String       @db.Text
+  created_at DateTime?    @db.Timestamp(0)
+  updated_at DateTime?    @db.Timestamp(0)
+  note_tag   note_tag[]
+  phrase_tag phrase_tag[]
+}
+
+model users {
+  id                BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name              String    @db.VarChar(255)
+  email             String    @unique(map: "users_email_unique") @db.VarChar(255)
+  email_verified_at DateTime? @db.Timestamp(0)
+  password          String    @db.VarChar(255)
+  remember_token    String?   @db.VarChar(100)
+  created_at        DateTime? @db.Timestamp(0)
+  updated_at        DateTime? @db.Timestamp(0)
+  deleted_at        DateTime? @db.Timestamp(0)
+  avatar            String?   @db.VarChar(255)
+}
