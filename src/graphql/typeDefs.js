@@ -2,13 +2,6 @@ export const typeDefs = `#graphql
   scalar BigInt
   scalar DateTime
 
-  type User {
-    id: BigInt!
-    name: String!
-    email: String!
-    avatar: String
-  }
-
   type Tag {
     id: BigInt!
     name: String!
@@ -43,6 +36,13 @@ export const typeDefs = `#graphql
     updatedAt: DateTime
   }
 
+  type User {
+    id: BigInt!
+    name: String!
+    email: String!
+    avatar: String
+  }
+
   type PageInfo {
     totalCount: Int!
     hasNextPage: Boolean!
@@ -59,28 +59,28 @@ export const typeDefs = `#graphql
     pageInfo: PageInfo!
   }
 
-  input UpdateProfileInput {
-    name: String
-    avatar: String
-  }
-
-  input ChangePasswordInput {
-    currentPassword: String!
-    newPassword: String!
+  type TagConnection {
+    items: [Tag!]!
+    pageInfo: PageInfo!
   }
 
   input PaginationInput {
-    limit: Int = 20
+    limit: Int = 10
     offset: Int = 0
   }
 
   input PhrasesFilter {
-    author: String
-    tagIds: [BigInt!]
-  }
+  text: String
+  author: String
+  tagIds: [BigInt!]
+}
 
   input NotesFilter {
     tagIds: [BigInt!]
+  }
+
+  input TagsFilter {
+    search: String
   }
 
   input CreatePhraseInput {
@@ -108,8 +108,17 @@ export const typeDefs = `#graphql
     tagIds: [BigInt!]
   }
 
+  input UpdateProfileInput {
+    name: String
+    avatar: String
+  }
+
+  input ChangePasswordInput {
+    currentPassword: String!
+    newPassword: String!
+  }
+
   type Query {
-    
     hello: String
     me: User
     randomPhrase: Phrase
@@ -120,31 +129,29 @@ export const typeDefs = `#graphql
     notes(filter: NotesFilter, pagination: PaginationInput): NoteConnection!
     note(id: BigInt!): Note
 
-    tags: [Tag!]!
+    tags(filter: TagsFilter, pagination: PaginationInput): TagConnection!
     tag(id: BigInt!): Tag
   }
 
   type Mutation {
-
-    deleteManyNotes(ids: [BigInt!]!): Int!
-    deleteManyPhrases(ids: [BigInt!]!): Int!
-    deleteManyTags(ids: [BigInt!]!): Int!
-
-     updateProfile(input: UpdateProfileInput!): User!
+    updateProfile(input: UpdateProfileInput!): User!
     changePassword(input: ChangePasswordInput!): Boolean!
 
     createNote(input: CreateNoteInput!): Note!
     updateNote(id: BigInt!, input: UpdateNoteInput!): Note!
     deleteNote(id: BigInt!): Boolean!
+    deleteManyNotes(ids: [BigInt!]!): Int!
     addImageToNote(noteId: BigInt!, url: String!): Image!
     removeImage(imageId: BigInt!): Boolean!
 
     createPhrase(input: CreatePhraseInput!): Phrase!
     updatePhrase(id: BigInt!, input: UpdatePhraseInput!): Phrase!
     deletePhrase(id: BigInt!): Boolean!
+    deleteManyPhrases(ids: [BigInt!]!): Int!
 
     createTag(name: String!): Tag!
     updateTag(id: BigInt!, name: String!): Tag!
     deleteTag(id: BigInt!): Boolean!
+    deleteManyTags(ids: [BigInt!]!): Int!
   }
 `;

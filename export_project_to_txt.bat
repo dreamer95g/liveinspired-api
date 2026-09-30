@@ -4,8 +4,8 @@ setlocal enabledelayedexpansion
 :: ================================
 :: 🚀 CONFIGURACIÓN
 :: ================================
-set "TARGET_DIR=C:\Users\gabry\Desktop\liveinspired"
-set "OUTPUT_FILE=output.txt"
+set "TARGET_DIR=C:\Dev\liveinspired"
+set "OUTPUT_FILE=output_code_api.txt"
 
 echo Borrando archivo anterior...
 del "%OUTPUT_FILE%" >nul 2>&1
@@ -31,6 +31,25 @@ for /r "%TARGET_DIR%" %%F in (*) do (
     if /i not "!file:generated\=!"=="!file!" (
         set "skip=true"
     )
+
+    :: ❌ Ignorar carpeta generated
+    if /i not "!file:.agents\=!"=="!file!" (
+        set "skip=true"
+    )
+
+
+:: ❌ Ignorar carpeta generated
+    if /i not "!file:.claude\=!"=="!file!" (
+        set "skip=true"
+    )
+
+
+    :: ❌ Ignorar carpeta generated
+    if /i not "!file:.windsurf\=!"=="!file!" (
+        set "skip=true"
+    )
+
+    
 
     :: ❌ Ignorar carpeta .git
     if /i not "!file:.git\=!"=="!file!" (

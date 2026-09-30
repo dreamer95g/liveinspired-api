@@ -24,9 +24,9 @@ function shapePhrase(p) {
   };
 }
 
-function normalizePagination({ limit = 20, offset = 0 } = {}) {
+function normalizePagination({ limit = 1000, offset = 0 } = {}) {
   return {
-    limit: Math.min(Math.max(limit, 1), 100),
+    limit: Math.min(Math.max(limit, 1), 1000),
     offset: Math.max(offset, 0),
   };
 }
@@ -47,14 +47,17 @@ export const phraseQueries = {
     const { limit, offset } = normalizePagination(pagination);
 
     const where = {};
-    if (filter.author) {
-      where.author = { contains: filter.author };
-    }
-    if (filter.tagIds?.length) {
-      where.AND = filter.tagIds.map((tag_id) => ({
-        phrase_tag: { some: { tag_id } },
-      }));
-    }
+if (filter.text) {
+  where.text = { contains: filter.text };
+}
+if (filter.author) {
+  where.author = { contains: filter.author };
+}
+if (filter.tagIds?.length) {
+  where.AND = filter.tagIds.map((tag_id) => ({
+    phrase_tag: { some: { tag_id } },
+  }));
+}
 
     const [totalCount, items] = await Promise.all([
       prisma.phrases.count({ where }),

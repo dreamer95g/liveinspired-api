@@ -1,5 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { GraphQLError } from 'graphql';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 function requireUser(user) {
   if (!user) {
@@ -33,6 +35,11 @@ export const userMutations = {
   updateProfile: async (_, { input }, { prisma, user }) => {
     const payload = requireUser(user);
 
+    // Buscamos el usuario actual para obtener su avatar viejo
+    const currentUser = await prisma.users.findFirst({
+      where: { id: BigInt(payload.sub) }
+    });
+
     const data = { updated_at: new Date() };
     if (input.name !== undefined) data.name = input.name;
     if (input.avatar !== undefined) data.avatar = input.avatar;
@@ -47,6 +54,18 @@ export const userMutations = {
       where: { id: BigInt(payload.sub) },
       data,
     });
+
+    // Si se envió un avatar nuevo y había uno viejo, lo borramos del disco
+    if (input.avatar !== undefined && currentUser.avatar && currentUser.avatar !== input.avatar) {
+      try {
+        const filename = currentUser.avatar.split('/').pop();
+        const filePath = path.resolve('uploads', filename);
+        await fs.unlink(filePath);
+      } catch (err) {
+        console.error('No se pudo borrar el avatar anterior:', err.message);
+      }
+    }
+
     return shapeUser(u);
   },
 

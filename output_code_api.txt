@@ -1,0 +1,1809 @@
+============================================
+Archivo: C:\Dev\liveinspired\.env
+============================================
+# Environment variables declared in this file are NOT automatically loaded by Prisma.
+# Please add `import "dotenv/config";` to your `prisma7.config.ts` file, or use the Prisma CLI with Bun
+# to load environment variables from .env files: https://pris.ly/prisma-config-env-vars.
+
+# Prisma supports the native connection string format for PostgreSQL, MySQL, SQLite, SQL Server, MongoDB and CockroachDB.
+# See the documentation for all the connection string options: https://pris.ly/d/connection-strings
+
+# The following `prisma+postgres` URL is similar to the URL produced by running a local Prisma Postgres
+# server with the `prisma dev` CLI command, when not choosing any non-default ports or settings. The API key, unlike the
+# one found in a remote Prisma Postgres URL, does not contain any sensitive information.
+
+DATABASE_URL="mysql://root:root@localhost:3306/liveinspired"
+
+PORT=4000
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:5173,http://localhost:3000,http://localhost:4000
+
+JWT_SECRET=521edc4c4b9ce78ff00f4d457de57c6414088e08848bd2993d46a79a5d916abceb69a1d8651859bd1569730fb2a2622d
+JWT_EXPIRES=30d
+
+MYSQLDUMP_PATH="mysqldump"
+
+
+
+============================================
+Archivo: C:\Dev\liveinspired\index.js
+============================================
+import express from 'express';
+import cors from 'cors';
+import path from 'node:path';
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@apollo/server/express4';
+
+import { env } from './src/lib/env.js';
+import { prisma } from './src/lib/prisma.js';
+import { upload } from './src/lib/upload.js';
+import { typeDefs } from './src/graphql/typeDefs.js';
+import { resolvers } from './src/graphql/resolvers/index.js';
+import { buildContext } from './src/graphql/context.js';
+import { authRouter } from './src/routes/auth.js';
+import { requireAuth } from './src/middleware/requireAuth.js';
+import { authPlugin } from './src/graphql/authPlugin.js';
+import { backupRouter } from './src/routes/backup.js';
+
+const app = express();
+
+
+
+app.use(
+  cors({
+    origin: env.NODE_ENV === 'production'
+      ? env.CORS_ORIGIN.split(',').map((s) => s.trim())
+      : true,
+    credentials: true,
+  })
+);
+
+app.use(express.json());
+
+// Archivos estáticos
+app.use('/uploads', express.static(path.resolve('uploads')));
+
+// Rutas de auth (públicas)
+app.use('/auth', authRouter);
+
+app.use('/backup', requireAuth, backupRouter);
+
+// Upload (protegido)
+app.post('/upload', requireAuth, upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No se recibió ningún archivo' });
+  }
+  res.json({
+    url: `/uploads/${req.file.filename}`,
+    filename: req.file.filename,
+    size: req.file.size,
+    mimetype: req.file.mimetype,
+  });
+});
+
+// Apollo
+const server = new ApolloServer(
+  { typeDefs, 
+    resolvers,
+    plugins: [authPlugin],
+   });
+await server.start();
+
+app.use(
+  '/graphql',
+  expressMiddleware(server, {
+    context: async ({ req }) => {
+      const base = buildContext({ req });
+      return { ...base, prisma };
+    },
+  })
+);
+
+// Manejador de errores (multer, etc.)
+app.use((err, _req, res, _next) => {
+  if (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+app.listen(env.PORT, () => {
+  console.log(`🚀 Servidor listo en http://localhost:${env.PORT}/graphql`);
+});
+
+============================================
+Archivo: C:\Dev\liveinspired\package.json
+============================================
+{
+  "name": "liveinspired",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "type": "module",
+  "dependencies": {
+    "@apollo/server": "^4.13.0",
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "graphql": "^16.14.2",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.4.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  }
+}
+
+
+============================================
+Archivo: C:\Dev\liveinspired\README.md
+============================================
+# LiveInspired — Backend
+
+API REST + GraphQL para la gestión de notas, frases y categorías (tags), con autenticación JWT, subida de imágenes y respaldo de base de datos.
+
+## 👤 Autor
+
+**Gabry95g**
+- GitHub: [@Gabry95g](https://github.com/dreamer95g)
+
+## 🛠️ Tecnologías
+
+- **Node.js** (v20+) con ES Modules
+- **Express 5** — servidor HTTP
+- **Apollo Server 4** — GraphQL
+- **Prisma 5** — ORM
+- **MySQL** — base de datos
+- **JWT** (`jsonwebtoken`) — autenticación
+- **bcryptjs** — hashing de contraseñas
+- **Multer** — subida de archivos
+- **CORS**, **dotenv**
+
+## 📋 Requisitos previos
+
+- Node.js 20 o superior
+- MySQL 8 o superior instalado y corriendo
+- `mysqldump` disponible (viene con MySQL; necesario para el endpoint de backup)
+- Git
+
+## 🚀 Instalación desde cero
+
+### 1. Clonar el repositorio
+
+```bash
+git clone https://github.com/dreamer95g/liveinspired-api.git
+cd liveinspired
+```
+
+### 2. Instalar dependencias
+
+```bash
+npm install
+```
+
+### 3. Crear la base de datos en MySQL
+
+Ingresá a MySQL:
+
+```bash
+mysql -u root -p
+```
+
+Y creá la base de datos:
+
+```sql
+CREATE DATABASE liveinspired CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+EXIT;
+```
+
+### 4. Configurar variables de entorno
+
+Creá un archivo `.env` en la raíz del proyecto con el siguiente contenido (ajustá los valores):
+
+```env
+DATABASE_URL="mysql://root:tu_password@localhost:3306/liveinspired"
+PORT=4000
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:5173,http://localhost:4000
+
+JWT_SECRET=pon_aqui_un_string_largo_aleatorio
+JWT_EXPIRES=30d
+
+# Opcional: si mysqldump no está en el PATH del sistema, poné la ruta completa
+# MYSQLDUMP_PATH=C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe
+```
+
+Para generar un `JWT_SECRET` aleatorio:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+```
+
+### 5. Aplicar el esquema de Prisma a la base de datos
+
+```bash
+npx prisma migrate deploy
+npx prisma generate
+```
+
+> **Nota:** si es una base nueva y no tenés migraciones versionadas, usá:
+> ```bash
+> npx prisma db push
+> npx prisma generate
+> ```
+
+### 6. Crear el primer usuario
+
+Insertá un usuario manualmente desde Prisma Studio o MySQL, con la contraseña hasheada. Opción rápida con un script:
+
+```bash
+node scripts/set-password.js tu@email.com TuPassword123
+```
+
+> Si el usuario no existe, creálo primero desde Prisma Studio (`npx prisma studio`) con un email, name, y password placeholder, y luego corré el script.
+
+### 7. Crear la carpeta de uploads
+
+```bash
+mkdir uploads
+```
+
+### 8. Correr el proyecto
+
+```bash
+npm run dev
+```
+
+El servidor arranca en `http://localhost:4000`.
+
+## 🔧 Scripts disponibles
+
+| Comando | Descripción |
+|---------|-------------|
+| `npm run dev` | Arranca el server en modo desarrollo (con `--watch`) |
+| `npm start` | Arranca el server en modo producción |
+| `npm run db:studio` | Abre Prisma Studio (interfaz visual de la BD) |
+| `npm run db:push` | Sincroniza el schema con la BD sin migraciones |
+| `npm run db:migrate` | Crea y aplica una migración |
+| `npm run db:generate` | Regenera el cliente de Prisma |
+
+## 📡 Endpoints
+
+### REST
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| POST | `/auth/login` | ❌ | Login con email y password. Devuelve JWT |
+| GET | `/auth/me` | ✅ | Devuelve el usuario del token |
+| POST | `/upload` | ✅ | Sube una imagen (multipart, campo `file`) |
+| GET | `/backup` | ✅ | Descarga un `.sql` con el backup completo |
+| GET | `/uploads/:filename` | ❌ | Sirve las imágenes subidas |
+| POST | `/graphql` | ✅ | Endpoint GraphQL |
+
+### GraphQL
+
+El schema completo se puede explorar en `http://localhost:4000/graphql` (Apollo Sandbox) con el header:
+
+```
+Authorization: Bearer <tu_token>
+```
+
+**Entidades principales:**
+
+- **User** — perfil del usuario autenticado (`me`, `updateProfile`, `changePassword`)
+- **Tag** — categorías (`tags`, `tag`, `createTag`, `updateTag`, `deleteTag`, `deleteManyTags`)
+- **Phrase** — frases (`phrases`, `phrase`, `randomPhrase`, `createPhrase`, `updatePhrase`, `deletePhrase`, `deleteManyPhrases`)
+- **Note** — notas (`notes`, `note`, `createNote`, `updateNote`, `deleteNote`, `deleteManyNotes`)
+- **Image** — imágenes asociadas a notas (`addImageToNote`, `removeImage`)
+
+**Filtros:**
+
+- `phrases(filter: { author, tagIds })` — combina autor y categorías (AND: la frase debe tener **todas** las categorías pasadas)
+- `notes(filter: { tagIds })` — filtra por categorías (AND)
+
+**Paginación:**
+
+Todas las listas aceptan `pagination: { limit, offset }` y devuelven:
+
+```graphql
+{
+  items { ... }
+  pageInfo { totalCount hasNextPage hasPreviousPage }
+}
+```
+
+## 📁 Estructura del proyecto
+
+```
+liveinspired/
+├── prisma/
+│   ├── schema.prisma        # Modelos de la BD
+│   └── migrations/          # Migraciones versionadas
+├── scripts/
+│   └── set-password.js      # Utilidad para resetear contraseñas
+├── src/
+│   ├── lib/
+│   │   ├── auth.js          # Firmar/verificar JWT
+│   │   ├── env.js           # Validación de variables de entorno
+│   │   ├── prisma.js        # Singleton de PrismaClient
+│   │   └── upload.js        # Configuración de Multer
+│   ├── middleware/
+│   │   └── requireAuth.js   # Middleware de autenticación REST
+│   ├── routes/
+│   │   ├── auth.js          # /auth/login, /auth/me
+│   │   └── backup.js        # /backup
+│   └── graphql/
+│       ├── authPlugin.js    # Plugin de Apollo para bloquear sin token
+│       ├── context.js       # Contexto de Apollo (usuario del JWT)
+│       ├── scalars.js       # Scalar BigInt personalizado
+│       ├── typeDefs.js      # Schema GraphQL
+│       └── resolvers/
+│           ├── index.js
+│           ├── note.js
+│           ├── phrase.js
+│           ├── tag.js
+│           └── user.js
+├── uploads/                 # Imágenes subidas (ignorado por git)
+├── .env                     # Variables de entorno (ignorado por git)
+├── .gitignore
+├── index.js                 # Punto de entrada
+├── package.json
+└── README.md
+```
+
+## 🔒 Seguridad
+
+- Las contraseñas se guardan hasheadas con **bcrypt** (10 rondas).
+- El JWT expira en **30 días** (configurable con `JWT_EXPIRES`).
+- Todos los endpoints excepto `/auth/login` y `/uploads/*` requieren token.
+- El endpoint GraphQL bloquea cualquier operación sin token excepto la introspección del schema.
+- El `.env` **nunca** se sube al repositorio.
+- El endpoint `/backup` pasa la contraseña de MySQL por variable de entorno, no como argumento del comando.
+
+## 📝 Licencia
+
+Proyecto personal. Todos los derechos reservados.
+
+============================================
+Archivo: C:\Dev\liveinspired\skills-lock.json
+============================================
+{
+  "version": 1,
+  "skills": {
+    "prisma-cli": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-cli/SKILL.md",
+      "computedHash": "f1e28c22e9dd3457eebc05c53a7921f96f8b9fdcf50edb93a0b1de73b78fa2c5"
+    },
+    "prisma-client-api": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-client-api/SKILL.md",
+      "computedHash": "5dcc0793337151efa73a444e5adbc7e1c24180778e83b4fe94c9109c391bd333"
+    },
+    "prisma-compute": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-compute/SKILL.md",
+      "computedHash": "e5695a3c6f35428e96df30ae662716bd4c9d9074f72cc9334b3050445a1bd4e2"
+    },
+    "prisma-database-setup": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-database-setup/SKILL.md",
+      "computedHash": "523066b1fe4b17a97d4f72f6190f8749815029a51a7e4fe190d8f74af1a8e74e"
+    },
+    "prisma-driver-adapter-implementation": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-driver-adapter-implementation/SKILL.md",
+      "computedHash": "07484627aea6cce4d0f94b4090ff9acc0caa7e104f9988b95abecf80132f4103"
+    },
+    "prisma-mongodb-upgrade": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-mongodb-upgrade/SKILL.md",
+      "computedHash": "5520dad1206102785bbc63bc3d3762dbf7832b48062c470d55285ae88a85f5eb"
+    },
+    "prisma-orm-setup": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-orm-setup/SKILL.md",
+      "computedHash": "af5046146c37652728b428b6a3b14d8f33cded97007644840cf9bf20a5194b5a"
+    },
+    "prisma-postgres": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-postgres/SKILL.md",
+      "computedHash": "8d46220ef3c7aeea1e60f90f4333c272d69ef19081ea438f50d9c0ca4e956395"
+    },
+    "prisma-postgres-setup": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-postgres-setup/SKILL.md",
+      "computedHash": "6a289913dfc32742c22880f14674f7805db94597d51fbbc5a0a44770b2e55bc8"
+    },
+    "prisma-upgrade-v7": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-upgrade-v7/SKILL.md",
+      "computedHash": "d3f7e7862612eaba013c99fc51452a98a0071394f83014dff0d85514137955c1"
+    }
+  }
+}
+
+
+============================================
+Archivo: C:\Dev\liveinspired\start-api.cmd
+============================================
+@echo off
+REM Cambiar a la unidad y ruta del proyecto
+cd /d C:\Dev\liveinspired
+
+REM Arrancar el servidor directamente en modo produccion
+npm start
+
+============================================
+Archivo: C:\Dev\liveinspired\start-api.vbs
+============================================
+Set WShell = CreateObject("WScript.Shell")
+WShell.Run "cmd.exe /c pm2 resurrect", 0, False
+
+============================================
+Archivo: C:\Dev\liveinspired\prisma\schema.prisma
+============================================
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model images {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String    @db.LongText
+  note_id    BigInt?   @db.UnsignedBigInt
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+  notes      notes?    @relation(fields: [note_id], references: [id], onDelete: Cascade, map: "images_note_id_foreign")
+
+  @@index([note_id], map: "images_note_id_foreign")
+}
+
+model note_tag {
+  note_id BigInt @db.UnsignedBigInt
+  tag_id  BigInt @db.UnsignedBigInt
+  notes   notes  @relation(fields: [note_id], references: [id], onDelete: Cascade, map: "note_tag_note_id_foreign")
+  tags    tags   @relation(fields: [tag_id], references: [id], onDelete: Cascade, map: "note_tag_tag_id_foreign")
+
+  @@id([note_id, tag_id])
+  @@index([note_id], map: "note_tag_note_id_foreign")
+  @@index([tag_id], map: "note_tag_tag_id_foreign")
+}
+
+model notes {
+  id         BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  date       DateTime   @db.Date
+  text       String     @db.LongText
+  created_at DateTime?  @db.Timestamp(0)
+  updated_at DateTime?  @db.Timestamp(0)
+  images     images[]
+  note_tag   note_tag[]
+}
+
+model phrase_tag {
+  phrase_id BigInt  @db.UnsignedBigInt
+  tag_id    BigInt  @db.UnsignedBigInt
+  phrases   phrases @relation(fields: [phrase_id], references: [id], onDelete: Cascade, map: "phrase_tag_phrase_id_foreign")
+  tags      tags    @relation(fields: [tag_id], references: [id], onDelete: Cascade, map: "phrase_tag_tag_id_foreign")
+
+  @@id([phrase_id, tag_id])
+  @@index([phrase_id], map: "phrase_tag_phrase_id_foreign")
+  @@index([tag_id], map: "phrase_tag_tag_id_foreign")
+}
+
+model phrases {
+  id         BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  text       String       @db.Text
+  author     String       @db.Text
+  created_at DateTime?    @db.Timestamp(0)
+  updated_at DateTime?    @db.Timestamp(0)
+  phrase_tag phrase_tag[]
+}
+
+model tags {
+  id         BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String       @db.Text
+  created_at DateTime?    @db.Timestamp(0)
+  updated_at DateTime?    @db.Timestamp(0)
+  note_tag   note_tag[]
+  phrase_tag phrase_tag[]
+}
+
+model users {
+  id                BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name              String    @db.VarChar(255)
+  email             String    @unique(map: "users_email_unique") @db.VarChar(255)
+  email_verified_at DateTime? @db.Timestamp(0)
+  password          String    @db.VarChar(255)
+  remember_token    String?   @db.VarChar(100)
+  created_at        DateTime? @db.Timestamp(0)
+  updated_at        DateTime? @db.Timestamp(0)
+  deleted_at        DateTime? @db.Timestamp(0)
+  avatar            String?   @db.VarChar(255)
+}
+.
+.
+============================================
+Archivo: C:\Dev\liveinspired\prisma\migrations\migration_lock.toml
+============================================
+# Please do not edit this file manually
+# It should be added in your version-control system (i.e. Git)
+provider = "mysql".
+.
+============================================
+Archivo: C:\Dev\liveinspired\prisma\migrations\20260929172958_notes_text_longtext\migration.sql
+============================================
+-- CreateTable
+CREATE TABLE `image_user` (
+    `image_id` BIGINT UNSIGNED NOT NULL,
+    `user_id` BIGINT UNSIGNED NOT NULL,
+
+    INDEX `image_user_image_id_foreign`(`image_id`),
+    INDEX `image_user_user_id_foreign`(`user_id`),
+    PRIMARY KEY (`image_id`, `user_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `images` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name` LONGTEXT NOT NULL,
+    `note_id` BIGINT UNSIGNED NULL,
+    `created_at` TIMESTAMP(0) NULL,
+    `updated_at` TIMESTAMP(0) NULL,
+
+    INDEX `images_note_id_foreign`(`note_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `note_tag` (
+    `note_id` BIGINT UNSIGNED NOT NULL,
+    `tag_id` BIGINT UNSIGNED NOT NULL,
+
+    INDEX `note_tag_note_id_foreign`(`note_id`),
+    INDEX `note_tag_tag_id_foreign`(`tag_id`),
+    PRIMARY KEY (`note_id`, `tag_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `notes` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `date` DATE NOT NULL,
+    `text` LONGTEXT NOT NULL,
+    `user_id` BIGINT UNSIGNED NOT NULL,
+    `created_at` TIMESTAMP(0) NULL,
+    `updated_at` TIMESTAMP(0) NULL,
+
+    INDEX `notes_user_id_foreign`(`user_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `phrase_tag` (
+    `phrase_id` BIGINT UNSIGNED NOT NULL,
+    `tag_id` BIGINT UNSIGNED NOT NULL,
+
+    INDEX `phrase_tag_phrase_id_foreign`(`phrase_id`),
+    INDEX `phrase_tag_tag_id_foreign`(`tag_id`),
+    PRIMARY KEY (`phrase_id`, `tag_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `phrases` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `text` TEXT NOT NULL,
+    `author` TEXT NOT NULL,
+    `user_id` BIGINT UNSIGNED NOT NULL,
+    `created_at` TIMESTAMP(0) NULL,
+    `updated_at` TIMESTAMP(0) NULL,
+
+    INDEX `phrases_user_id_foreign`(`user_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `tags` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name` TEXT NOT NULL,
+    `user_id` BIGINT UNSIGNED NOT NULL,
+    `created_at` TIMESTAMP(0) NULL,
+    `updated_at` TIMESTAMP(0) NULL,
+
+    INDEX `tags_user_id_foreign`(`user_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `users` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(255) NOT NULL,
+    `email` VARCHAR(255) NOT NULL,
+    `email_verified_at` TIMESTAMP(0) NULL,
+    `password` VARCHAR(255) NOT NULL,
+    `remember_token` VARCHAR(100) NULL,
+    `created_at` TIMESTAMP(0) NULL,
+    `updated_at` TIMESTAMP(0) NULL,
+    `deleted_at` TIMESTAMP(0) NULL,
+    `avatar` VARCHAR(255) NULL,
+
+    UNIQUE INDEX `users_email_unique`(`email`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- AddForeignKey
+ALTER TABLE `image_user` ADD CONSTRAINT `image_user_image_id_foreign` FOREIGN KEY (`image_id`) REFERENCES `images`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `image_user` ADD CONSTRAINT `image_user_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `images` ADD CONSTRAINT `images_note_id_foreign` FOREIGN KEY (`note_id`) REFERENCES `notes`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `note_tag` ADD CONSTRAINT `note_tag_note_id_foreign` FOREIGN KEY (`note_id`) REFERENCES `notes`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `note_tag` ADD CONSTRAINT `note_tag_tag_id_foreign` FOREIGN KEY (`tag_id`) REFERENCES `tags`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `notes` ADD CONSTRAINT `notes_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `phrase_tag` ADD CONSTRAINT `phrase_tag_phrase_id_foreign` FOREIGN KEY (`phrase_id`) REFERENCES `phrases`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `phrase_tag` ADD CONSTRAINT `phrase_tag_tag_id_foreign` FOREIGN KEY (`tag_id`) REFERENCES `tags`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `phrases` ADD CONSTRAINT `phrases_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `tags` ADD CONSTRAINT `tags_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+.
+.
+============================================
+Archivo: C:\Dev\liveinspired\scripts\set-password.js
+============================================
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+
+const prisma = new PrismaClient();
+
+const email = process.argv[2];
+const newPassword = process.argv[3];
+
+if (!email || !newPassword) {
+  console.error('Uso: node scripts/set-password.js <email> <nueva_password>');
+  process.exit(1);
+}
+
+const hash = await bcrypt.hash(newPassword, 10);
+const user = await prisma.users.update({
+  where: { email },
+  data: { password: hash, updated_at: new Date() },
+});
+
+console.log(`✅ Contraseña actualizada para ${user.email}`);
+await prisma.$disconnect();.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\graphql\authPlugin.js
+============================================
+import { GraphQLError } from 'graphql';
+
+function isIntrospection(document) {
+  return document.definitions.some((def) => {
+    if (def.kind !== 'OperationDefinition') return false;
+    return def.selectionSet.selections.some(
+      (sel) => sel.kind === 'Field' && sel.name.value === '__schema'
+    );
+  });
+}
+
+export const authPlugin = {
+  async requestDidStart() {
+    return {
+      async didResolveOperation({ document, contextValue }) {
+        if (isIntrospection(document)) return;
+
+        if (!contextValue?.user) {
+          throw new GraphQLError('No autenticado', {
+            extensions: { code: 'UNAUTHENTICATED' },
+          });
+        }
+      },
+    };
+  },
+};.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\graphql\context.js
+============================================
+import { verifyToken, extractToken } from '../lib/auth.js';
+
+export function buildContext({ req }) {
+  const token = extractToken(req);
+  const payload = token ? verifyToken(token) : null;
+  return { user: payload ?? null };
+}.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\graphql\scalars.js
+============================================
+import { GraphQLScalarType, Kind } from 'graphql';
+
+
+
+export const BigIntScalar = new GraphQLScalarType({
+  name: 'BigInt',
+  description: 'Entero de 64 bits, serializado como string',
+  serialize: (v) => (v == null ? null : v.toString()),
+  parseValue: (v) => {
+    if (typeof v === 'bigint') return v;
+    if (typeof v === 'number' || typeof v === 'string') return BigInt(v);
+    throw new TypeError('BigInt inválido');
+  },
+  parseLiteral: (ast) => {
+    if (ast.kind === Kind.INT || ast.kind === Kind.STRING) {
+      return BigInt(ast.value);
+    }
+    return null;
+  },
+});
+
+export const DateTimeScalar = new GraphQLScalarType({
+  name: 'DateTime',
+  description: 'Fecha y hora en formato ISO-8601',
+  serialize: (v) => (v instanceof Date ? v.toISOString() : v),
+  parseValue: (v) => new Date(v),
+  parseLiteral: (ast) => (ast.kind === Kind.STRING ? new Date(ast.value) : null),
+});.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\graphql\typeDefs.js
+============================================
+export const typeDefs = `#graphql
+  scalar BigInt
+  scalar DateTime
+
+  type Tag {
+    id: BigInt!
+    name: String!
+    createdAt: DateTime
+    updatedAt: DateTime
+  }
+
+  type Image {
+    id: BigInt!
+    name: String!
+    noteId: BigInt
+    createdAt: DateTime
+    updatedAt: DateTime
+  }
+
+  type Phrase {
+    id: BigInt!
+    text: String!
+    author: String!
+    tags: [Tag!]!
+    createdAt: DateTime
+    updatedAt: DateTime
+  }
+
+  type Note {
+    id: BigInt!
+    date: DateTime!
+    text: String!
+    tags: [Tag!]!
+    images: [Image!]!
+    createdAt: DateTime
+    updatedAt: DateTime
+  }
+
+  type User {
+    id: BigInt!
+    name: String!
+    email: String!
+    avatar: String
+  }
+
+  type PageInfo {
+    totalCount: Int!
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+  }
+
+  type PhraseConnection {
+    items: [Phrase!]!
+    pageInfo: PageInfo!
+  }
+
+  type NoteConnection {
+    items: [Note!]!
+    pageInfo: PageInfo!
+  }
+
+  type TagConnection {
+    items: [Tag!]!
+    pageInfo: PageInfo!
+  }
+
+  input PaginationInput {
+    limit: Int = 10
+    offset: Int = 0
+  }
+
+  input PhrasesFilter {
+  text: String
+  author: String
+  tagIds: [BigInt!]
+}
+
+  input NotesFilter {
+    tagIds: [BigInt!]
+  }
+
+  input TagsFilter {
+    search: String
+  }
+
+  input CreatePhraseInput {
+    text: String!
+    author: String!
+    tagIds: [BigInt!]
+  }
+
+  input UpdatePhraseInput {
+    text: String
+    author: String
+    tagIds: [BigInt!]
+  }
+
+  input CreateNoteInput {
+    text: String!
+    date: DateTime
+    tagIds: [BigInt!]
+    imageUrls: [String!]
+  }
+
+  input UpdateNoteInput {
+    text: String
+    date: DateTime
+    tagIds: [BigInt!]
+  }
+
+  input UpdateProfileInput {
+    name: String
+    avatar: String
+  }
+
+  input ChangePasswordInput {
+    currentPassword: String!
+    newPassword: String!
+  }
+
+  type Query {
+    hello: String
+    me: User
+    randomPhrase: Phrase
+
+    phrases(filter: PhrasesFilter, pagination: PaginationInput): PhraseConnection!
+    phrase(id: BigInt!): Phrase
+
+    notes(filter: NotesFilter, pagination: PaginationInput): NoteConnection!
+    note(id: BigInt!): Note
+
+    tags(filter: TagsFilter, pagination: PaginationInput): TagConnection!
+    tag(id: BigInt!): Tag
+  }
+
+  type Mutation {
+    updateProfile(input: UpdateProfileInput!): User!
+    changePassword(input: ChangePasswordInput!): Boolean!
+
+    createNote(input: CreateNoteInput!): Note!
+    updateNote(id: BigInt!, input: UpdateNoteInput!): Note!
+    deleteNote(id: BigInt!): Boolean!
+    deleteManyNotes(ids: [BigInt!]!): Int!
+    addImageToNote(noteId: BigInt!, url: String!): Image!
+    removeImage(imageId: BigInt!): Boolean!
+
+    createPhrase(input: CreatePhraseInput!): Phrase!
+    updatePhrase(id: BigInt!, input: UpdatePhraseInput!): Phrase!
+    deletePhrase(id: BigInt!): Boolean!
+    deleteManyPhrases(ids: [BigInt!]!): Int!
+
+    createTag(name: String!): Tag!
+    updateTag(id: BigInt!, name: String!): Tag!
+    deleteTag(id: BigInt!): Boolean!
+    deleteManyTags(ids: [BigInt!]!): Int!
+  }
+`;.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\graphql\resolvers\index.js
+============================================
+import { BigIntScalar, DateTimeScalar } from '../scalars.js';
+import { phraseQueries, phraseMutations } from './phrase.js';
+import { tagQueries, tagMutations } from './tag.js';
+import { noteQueries, noteMutations } from './note.js';
+import { userQueries, userMutations } from './user.js';
+
+export const resolvers = {
+  BigInt: BigIntScalar,
+  DateTime: DateTimeScalar,
+
+  Query: {
+    hello: () => '¡El servidor Express con Apollo y Prisma está vivo!',
+    ...phraseQueries,
+    ...tagQueries,
+    ...noteQueries,
+    ...userQueries,
+  },
+
+  Mutation: {
+    ...phraseMutations,
+    ...tagMutations,
+    ...noteMutations,
+    ...userMutations,
+  },
+};.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\graphql\resolvers\note.js
+============================================
+import { GraphQLError } from 'graphql';
+
+const noteInclude = {
+  images: true,
+  note_tag: { include: { tags: true } },
+};
+
+function shapeTag(t) {
+  return {
+    id: t.id,
+    name: t.name,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at,
+  };
+}
+
+function shapeImage(i) {
+  return {
+    id: i.id,
+    name: i.name,
+    noteId: i.note_id,
+    createdAt: i.created_at,
+    updatedAt: i.updated_at,
+  };
+}
+
+function shapeNote(n) {
+  return {
+    id: n.id,
+    date: n.date,
+    text: n.text,
+    createdAt: n.created_at,
+    updatedAt: n.updated_at,
+    images: (n.images ?? []).map(shapeImage),
+    tags: (n.note_tag ?? []).map((nt) => shapeTag(nt.tags)),
+  };
+}
+
+function normalizePagination({ limit = 20, offset = 0 } = {}) {
+  return {
+    limit: Math.min(Math.max(limit, 1), 100),
+    offset: Math.max(offset, 0),
+  };
+}
+
+export const noteQueries = {
+  notes: async (_, { filter = {}, pagination = {} }, { prisma }) => {
+    const { limit, offset } = normalizePagination(pagination);
+
+    const where = {};
+    if (filter.tagIds?.length) {
+      where.AND = filter.tagIds.map((tag_id) => ({
+        note_tag: { some: { tag_id } },
+      }));
+    }
+
+    const [totalCount, items] = await Promise.all([
+      prisma.notes.count({ where }),
+      prisma.notes.findMany({
+        where,
+        orderBy: [{ date: 'desc' }, { id: 'desc' }],
+        skip: offset,
+        take: limit,
+        include: noteInclude,
+      }),
+    ]);
+
+    return {
+      items: items.map(shapeNote),
+      pageInfo: {
+        totalCount,
+        hasNextPage: offset + limit < totalCount,
+        hasPreviousPage: offset > 0,
+      },
+    };
+  },
+
+  note: async (_, { id }, { prisma }) => {
+    const n = await prisma.notes.findUnique({
+      where: { id },
+      include: noteInclude,
+    });
+    return n ? shapeNote(n) : null;
+  },
+};
+
+export const noteMutations = {
+  createNote: async (_, { input }, { prisma }) => {
+    const now = new Date();
+    const note = await prisma.notes.create({
+      data: {
+        text: input.text,
+        date: input.date ?? now,
+        created_at: now,
+        updated_at: now,
+        note_tag: input.tagIds?.length
+          ? {
+              create: input.tagIds.map((tag_id) => ({
+                tags: { connect: { id: tag_id } },
+              })),
+            }
+          : undefined,
+        images: input.imageUrls?.length
+          ? {
+              create: input.imageUrls.map((url) => ({
+                name: url,
+                created_at: now,
+                updated_at: now,
+              })),
+            }
+          : undefined,
+      },
+      include: noteInclude,
+    });
+    return shapeNote(note);
+  },
+
+  updateNote: async (_, { id, input }, { prisma }) => {
+    const existing = await prisma.notes.findUnique({ where: { id } });
+    if (!existing) {
+      throw new GraphQLError('Nota no encontrada', {
+        extensions: { code: 'NOT_FOUND' },
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (input.tagIds !== undefined) {
+        await tx.note_tag.deleteMany({ where: { note_id: id } });
+      }
+      return tx.notes.update({
+        where: { id },
+        data: {
+          text: input.text ?? undefined,
+          date: input.date ?? undefined,
+          updated_at: new Date(),
+          note_tag: input.tagIds?.length
+            ? {
+                create: input.tagIds.map((tag_id) => ({
+                  tags: { connect: { id: tag_id } },
+                })),
+              }
+            : undefined,
+        },
+        include: noteInclude,
+      });
+    });
+
+    return shapeNote(updated);
+  },
+
+  deleteNote: async (_, { id }, { prisma }) => {
+    const existing = await prisma.notes.findUnique({ where: { id } });
+    if (!existing) {
+      throw new GraphQLError('Nota no encontrada', {
+        extensions: { code: 'NOT_FOUND' },
+      });
+    }
+    await prisma.notes.delete({ where: { id } });
+    return true;
+  },
+
+  addImageToNote: async (_, { noteId, url }, { prisma }) => {
+    const note = await prisma.notes.findUnique({ where: { id: noteId } });
+    if (!note) {
+      throw new GraphQLError('Nota no encontrada', {
+        extensions: { code: 'NOT_FOUND' },
+      });
+    }
+    const now = new Date();
+    const image = await prisma.images.create({
+      data: {
+        name: url,
+        note_id: noteId,
+        created_at: now,
+        updated_at: now,
+      },
+    });
+    return shapeImage(image);
+  },
+
+  removeImage: async (_, { imageId }, { prisma }) => {
+    const image = await prisma.images.findUnique({ where: { id: imageId } });
+    if (!image) {
+      throw new GraphQLError('Imagen no encontrada', {
+        extensions: { code: 'NOT_FOUND' },
+      });
+    }
+    await prisma.images.delete({ where: { id: imageId } });
+    return true;
+  },
+
+  deleteManyNotes: async (_, { ids }, { prisma }) => {
+    if (!ids?.length) return 0;
+    const result = await prisma.notes.deleteMany({
+      where: { id: { in: ids } },
+    });
+    return result.count;
+  },
+};.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\graphql\resolvers\phrase.js
+============================================
+import { GraphQLError } from 'graphql';
+
+const phraseInclude = {
+  phrase_tag: { include: { tags: true } },
+};
+
+function shapeTag(t) {
+  return {
+    id: t.id,
+    name: t.name,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at,
+  };
+}
+
+function shapePhrase(p) {
+  return {
+    id: p.id,
+    text: p.text,
+    author: p.author,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+    tags: (p.phrase_tag ?? []).map((pt) => shapeTag(pt.tags)),
+  };
+}
+
+function normalizePagination({ limit = 1000, offset = 0 } = {}) {
+  return {
+    limit: Math.min(Math.max(limit, 1), 1000),
+    offset: Math.max(offset, 0),
+  };
+}
+
+export const phraseQueries = {
+  randomPhrase: async (_, __, { prisma }) => {
+    const count = await prisma.phrases.count();
+    if (count === 0) return null;
+    const skip = Math.floor(Math.random() * count);
+    const p = await prisma.phrases.findFirst({
+      skip,
+      include: phraseInclude,
+    });
+    return p ? shapePhrase(p) : null;
+  },
+
+  phrases: async (_, { filter = {}, pagination = {} }, { prisma }) => {
+    const { limit, offset } = normalizePagination(pagination);
+
+    const where = {};
+if (filter.text) {
+  where.text = { contains: filter.text };
+}
+if (filter.author) {
+  where.author = { contains: filter.author };
+}
+if (filter.tagIds?.length) {
+  where.AND = filter.tagIds.map((tag_id) => ({
+    phrase_tag: { some: { tag_id } },
+  }));
+}
+
+    const [totalCount, items] = await Promise.all([
+      prisma.phrases.count({ where }),
+      prisma.phrases.findMany({
+        where,
+        orderBy: { id: 'desc' },
+        skip: offset,
+        take: limit,
+        include: phraseInclude,
+      }),
+    ]);
+
+    return {
+      items: items.map(shapePhrase),
+      pageInfo: {
+        totalCount,
+        hasNextPage: offset + limit < totalCount,
+        hasPreviousPage: offset > 0,
+      },
+    };
+  },
+
+  phrase: async (_, { id }, { prisma }) => {
+    const p = await prisma.phrases.findUnique({
+      where: { id },
+      include: phraseInclude,
+    });
+    return p ? shapePhrase(p) : null;
+  },
+};
+
+export const phraseMutations = {
+
+  deleteManyPhrases: async (_, { ids }, { prisma }) => {
+    if (!ids?.length) return 0;
+    const result = await prisma.phrases.deleteMany({
+      where: { id: { in: ids } },
+    });
+    return result.count;
+  },
+
+  createPhrase: async (_, { input }, { prisma }) => {
+    const now = new Date();
+    const p = await prisma.phrases.create({
+      data: {
+        text: input.text,
+        author: input.author,
+        created_at: now,
+        updated_at: now,
+        phrase_tag: input.tagIds?.length
+          ? {
+              create: input.tagIds.map((tag_id) => ({
+                tags: { connect: { id: tag_id } },
+              })),
+            }
+          : undefined,
+      },
+      include: phraseInclude,
+    });
+    return shapePhrase(p);
+  },
+
+  updatePhrase: async (_, { id, input }, { prisma }) => {
+    const existing = await prisma.phrases.findUnique({ where: { id } });
+    if (!existing) {
+      throw new GraphQLError('Frase no encontrada', {
+        extensions: { code: 'NOT_FOUND' },
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (input.tagIds !== undefined) {
+        await tx.phrase_tag.deleteMany({ where: { phrase_id: id } });
+      }
+      return tx.phrases.update({
+        where: { id },
+        data: {
+          text: input.text ?? undefined,
+          author: input.author ?? undefined,
+          updated_at: new Date(),
+          phrase_tag: input.tagIds?.length
+            ? {
+                create: input.tagIds.map((tag_id) => ({
+                  tags: { connect: { id: tag_id } },
+                })),
+              }
+            : undefined,
+        },
+        include: phraseInclude,
+      });
+    });
+
+    return shapePhrase(updated);
+  },
+
+  deletePhrase: async (_, { id }, { prisma }) => {
+    const existing = await prisma.phrases.findUnique({ where: { id } });
+    if (!existing) {
+      throw new GraphQLError('Frase no encontrada', {
+        extensions: { code: 'NOT_FOUND' },
+      });
+    }
+    await prisma.phrases.delete({ where: { id } });
+    return true;
+  },
+};.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\graphql\resolvers\tag.js
+============================================
+import { GraphQLError } from 'graphql';
+
+function shapeTag(t) {
+  return {
+    id: t.id,
+    name: t.name,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at,
+  };
+}
+
+function normalizePagination({ limit = 10, offset = 0 } = {}) {
+  return {
+    limit: Math.min(Math.max(limit, 1), 1000),
+    offset: Math.max(offset, 0),
+  };
+}
+
+export const tagQueries = {
+  tags: async (_, { filter = {}, pagination = {} }, { prisma }) => {
+    const { limit, offset } = normalizePagination(pagination);
+
+    const where = {};
+    if (filter.search) {
+      where.name = { contains: filter.search };
+    }
+
+    const [totalCount, items] = await Promise.all([
+      prisma.tags.count({ where }),
+      prisma.tags.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip: offset,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      items: items.map(shapeTag),
+      pageInfo: {
+        totalCount,
+        hasNextPage: offset + limit < totalCount,
+        hasPreviousPage: offset > 0,
+      },
+    };
+  },
+
+  tag: async (_, { id }, { prisma }) => {
+    const t = await prisma.tags.findUnique({ where: { id } });
+    return t ? shapeTag(t) : null;
+  },
+};
+
+export const tagMutations = {
+
+  deleteManyTags: async (_, { ids }, { prisma }) => {
+    if (!ids?.length) return 0;
+    const result = await prisma.tags.deleteMany({
+      where: { id: { in: ids } },
+    });
+    return result.count;
+  },
+  
+  createTag: async (_, { name }, { prisma }) => {
+    const t = await prisma.tags.create({
+      data: {
+        name,
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    });
+    return shapeTag(t);
+  },
+
+  updateTag: async (_, { id, name }, { prisma }) => {
+    const existing = await prisma.tags.findUnique({ where: { id } });
+    if (!existing) {
+      throw new GraphQLError('Tag no encontrado', {
+        extensions: { code: 'NOT_FOUND' },
+      });
+    }
+    const t = await prisma.tags.update({
+      where: { id },
+      data: { name, updated_at: new Date() },
+    });
+    return shapeTag(t);
+  },
+
+  deleteTag: async (_, { id }, { prisma }) => {
+    const existing = await prisma.tags.findUnique({ where: { id } });
+    if (!existing) {
+      throw new GraphQLError('Tag no encontrado', {
+        extensions: { code: 'NOT_FOUND' },
+      });
+    }
+    await prisma.tags.delete({ where: { id } });
+    return true;
+  },
+};.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\graphql\resolvers\user.js
+============================================
+import bcrypt from 'bcryptjs';
+import { GraphQLError } from 'graphql';
+
+function requireUser(user) {
+  if (!user) {
+    throw new GraphQLError('No autenticado', {
+      extensions: { code: 'UNAUTHENTICATED' },
+    });
+  }
+  return user;
+}
+
+function shapeUser(u) {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    avatar: u.avatar,
+  };
+}
+
+export const userQueries = {
+  me: async (_, __, { prisma, user }) => {
+    const payload = requireUser(user);
+    const u = await prisma.users.findFirst({
+      where: { id: BigInt(payload.sub), deleted_at: null },
+    });
+    return u ? shapeUser(u) : null;
+  },
+};
+
+export const userMutations = {
+  updateProfile: async (_, { input }, { prisma, user }) => {
+    const payload = requireUser(user);
+
+    const data = { updated_at: new Date() };
+    if (input.name !== undefined) data.name = input.name;
+    if (input.avatar !== undefined) data.avatar = input.avatar;
+
+    if (Object.keys(data).length === 1) {
+      throw new GraphQLError('Nada que actualizar', {
+        extensions: { code: 'BAD_USER_INPUT' },
+      });
+    }
+
+    const u = await prisma.users.update({
+      where: { id: BigInt(payload.sub) },
+      data,
+    });
+    return shapeUser(u);
+  },
+
+  changePassword: async (_, { input }, { prisma, user }) => {
+    const payload = requireUser(user);
+
+    const u = await prisma.users.findFirst({
+      where: { id: BigInt(payload.sub), deleted_at: null },
+    });
+    if (!u) {
+      throw new GraphQLError('Usuario no encontrado', {
+        extensions: { code: 'NOT_FOUND' },
+      });
+    }
+
+    const ok = await bcrypt.compare(input.currentPassword, u.password);
+    if (!ok) {
+      throw new GraphQLError('Contraseña actual incorrecta', {
+        extensions: { code: 'BAD_USER_INPUT' },
+      });
+    }
+
+    if (input.newPassword.length < 6) {
+      throw new GraphQLError('La contraseña debe tener al menos 6 caracteres', {
+        extensions: { code: 'BAD_USER_INPUT' },
+      });
+    }
+
+    const hash = await bcrypt.hash(input.newPassword, 10);
+    await prisma.users.update({
+      where: { id: u.id },
+      data: { password: hash, updated_at: new Date() },
+    });
+    return true;
+  },
+};.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\lib\auth.js
+============================================
+import jwt from 'jsonwebtoken';
+import { env } from './env.js';
+
+export function signToken(user) {
+  return jwt.sign(
+    {
+      sub: user.id.toString(),
+      email: user.email,
+      name: user.name,
+    },
+    env.JWT_SECRET,
+    { expiresIn: env.JWT_EXPIRES }
+  );
+}
+
+export function verifyToken(token) {
+  try {
+    return jwt.verify(token, env.JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
+export function extractToken(req) {
+  const header = req.headers.authorization ?? '';
+  return header.startsWith('Bearer ') ? header.slice(7) : null;
+}.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\lib\env.js
+============================================
+import 'dotenv/config';
+
+const required = ['DATABASE_URL', 'JWT_SECRET'];
+const missing = required.filter((k) => !process.env[k]);
+
+if (missing.length > 0) {
+  console.error(`❌ Faltan variables de entorno: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
+export const env = {
+  DATABASE_URL: process.env.DATABASE_URL,
+  PORT: Number(process.env.PORT ?? 4000),
+  NODE_ENV: process.env.NODE_ENV ?? 'development',
+  CORS_ORIGIN: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+  JWT_SECRET: process.env.JWT_SECRET,
+  JWT_EXPIRES: process.env.JWT_EXPIRES ?? '30d',
+  MYSQLDUMP_PATH: process.env.MYSQLDUMP_PATH ?? 'mysqldump',
+};.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\lib\prisma.js
+============================================
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = globalThis;
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+  });
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\lib\upload.js
+============================================
+import multer from 'multer';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+
+const UPLOAD_DIR = path.resolve('uploads');
+
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+const ALLOWED_MIME = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const unique = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+    cb(null, unique);
+  },
+});
+
+export const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (_req, file, cb) => {
+    if (!ALLOWED_MIME.has(file.mimetype)) {
+      return cb(new Error('Tipo de archivo no permitido'));
+    }
+    cb(null, true);
+  },
+});.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\middleware\requireAuth.js
+============================================
+import { verifyToken, extractToken } from '../lib/auth.js';
+
+export function requireAuth(req, res, next) {
+  const token = extractToken(req);
+  const payload = token ? verifyToken(token) : null;
+
+  if (!payload) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  req.user = payload;
+  next();
+}.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\routes\auth.js
+============================================
+import express from 'express';
+import bcrypt from 'bcryptjs';
+import { prisma } from '../lib/prisma.js';
+import { signToken, verifyToken, extractToken } from '../lib/auth.js';
+
+export const authRouter = express.Router();
+
+authRouter.post('/login', async (req, res) => {
+  const { email, password } = req.body ?? {};
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email y password son requeridos' });
+  }
+
+  const user = await prisma.users.findFirst({
+    where: { email, deleted_at: null },
+  });
+
+  if (!user) {
+    return res.status(401).json({ error: 'Credenciales inválidas' });
+  }
+
+  const ok = await bcrypt.compare(password, user.password);
+  if (!ok) {
+    return res.status(401).json({ error: 'Credenciales inválidas' });
+  }
+
+  const token = signToken(user);
+
+  res.json({
+    token,
+    user: {
+      id: user.id.toString(),
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar,
+    },
+  });
+});
+
+authRouter.get('/me', async (req, res) => {
+  const token = extractToken(req);
+  if (!token) return res.status(401).json({ error: 'No autenticado' });
+
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: 'Token inválido o expirado' });
+
+  const user = await prisma.users.findFirst({
+    where: { id: BigInt(payload.sub), deleted_at: null },
+  });
+  if (!user) return res.status(401).json({ error: 'Usuario no encontrado' });
+
+  res.json({
+    id: user.id.toString(),
+    name: user.name,
+    email: user.email,
+    avatar: user.avatar,
+  });
+});.
+.
+============================================
+Archivo: C:\Dev\liveinspired\src\routes\backup.js
+============================================
+import express from 'express';
+import { spawn } from 'node:child_process';
+import { env } from '../lib/env.js';
+
+export const backupRouter = express.Router();
+
+backupRouter.get('/', (req, res) => {
+  // Parseamos DATABASE_URL para extraer credenciales
+  let url;
+  try {
+    url = new URL(env.DATABASE_URL);
+  } catch {
+    return res.status(500).json({ error: 'DATABASE_URL inválida' });
+  }
+
+  const host = url.hostname;
+  const port = url.port || '3306';
+  const user = decodeURIComponent(url.username);
+  const password = decodeURIComponent(url.password);
+  const database = url.pathname.replace(/^\//, '');
+
+  if (!database) {
+    return res.status(500).json({ error: 'No se pudo determinar el nombre de la base' });
+  }
+
+  const timestamp = new Date().toISOString().slice(0, 10);
+  const filename = `liveinspired-backup-${timestamp}.sql`;
+
+  res.setHeader('Content-Type', 'application/sql; charset=utf-8');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${filename}"`
+  );
+
+  // Pasamos la password por variable de entorno (evita que quede en el listado de procesos)
+  const child = spawn(env.MYSQLDUMP_PATH, [
+    '-h', host,
+    '-P', port,
+    '-u', user,
+    '--single-transaction',
+    '--routines',
+    '--triggers',
+    '--add-drop-table',
+    database,
+  ], {
+    env: { ...process.env, MYSQL_PWD: password },
+    windowsHide: true,
+  });
+
+  child.stdout.pipe(res);
+
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  child.on('error', (err) => {
+    console.error('[Backup error]', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'No se pudo ejecutar mysqldump' });
+    }
+  });
+
+  child.on('close', (code) => {
+    if (code !== 0) {
+      console.error('[Backup failed]', stderr);
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: 'Falló el backup',
+          detail: stderr.trim(),
+        });
+      }
+    }
+  });
+});.
+.

@@ -9,12 +9,40 @@ function shapeTag(t) {
   };
 }
 
+function normalizePagination({ limit = 10, offset = 0 } = {}) {
+  return {
+    limit: Math.min(Math.max(limit, 1), 1000),
+    offset: Math.max(offset, 0),
+  };
+}
+
 export const tagQueries = {
-  tags: async (_, __, { prisma }) => {
-    const tags = await prisma.tags.findMany({
-      orderBy: { name: 'asc' },
-    });
-    return tags.map(shapeTag);
+  tags: async (_, { filter = {}, pagination = {} }, { prisma }) => {
+    const { limit, offset } = normalizePagination(pagination);
+
+    const where = {};
+    if (filter.search) {
+      where.name = { contains: filter.search };
+    }
+
+    const [totalCount, items] = await Promise.all([
+      prisma.tags.count({ where }),
+      prisma.tags.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip: offset,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      items: items.map(shapeTag),
+      pageInfo: {
+        totalCount,
+        hasNextPage: offset + limit < totalCount,
+        hasPreviousPage: offset > 0,
+      },
+    };
   },
 
   tag: async (_, { id }, { prisma }) => {

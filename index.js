@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
@@ -49,6 +50,23 @@ app.post('/upload', requireAuth, upload.single('file'), (req, res) => {
     size: req.file.size,
     mimetype: req.file.mimetype,
   });
+});
+
+// Endpoint para borrar imágenes huérfanas
+app.delete('/upload/:filename', requireAuth, async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const filePath = path.resolve('uploads', filename);
+    
+    console.log(`[CLEANUP] Intentando borrar físicamente: ${filePath}`);
+    await fs.unlink(filePath);
+    console.log(`[CLEANUP] Éxito. Archivo eliminado: ${filename}`);
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error(`[CLEANUP] Error borrando ${req.params.filename}:`, err.message);
+    res.status(404).json({ error: 'Archivo no encontrado' });
+  }
 });
 
 // Apollo

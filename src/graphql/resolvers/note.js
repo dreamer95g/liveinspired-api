@@ -1,4 +1,6 @@
 import { GraphQLError } from 'graphql';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 const noteInclude = {
   images: true,
@@ -41,6 +43,18 @@ function normalizePagination({ limit = 20, offset = 0 } = {}) {
     limit: Math.min(Math.max(limit, 1), 100),
     offset: Math.max(offset, 0),
   };
+}
+
+// Helper para borrar archivo físico
+async function deletePhysicalFile(imageUrl) {
+  if (!imageUrl) return;
+  try {
+    const filename = imageUrl.split('/').pop();
+    const filePath = path.resolve('uploads', filename);
+    await fs.unlink(filePath);
+  } catch (err) {
+    console.error(`No se pudo borrar físicamente la imagen ${imageUrl}:`, err.message);
+  }
 }
 
 export const noteQueries = {
@@ -149,13 +163,25 @@ export const noteMutations = {
   },
 
   deleteNote: async (_, { id }, { prisma }) => {
-    const existing = await prisma.notes.findUnique({ where: { id } });
+    const existing = await prisma.notes.findUnique({ 
+      where: { id },
+      include: { images: true } 
+    });
+    
     if (!existing) {
       throw new GraphQLError('Nota no encontrada', {
         extensions: { code: 'NOT_FOUND' },
       });
     }
+
+    // Eliminamos de la base de datos
     await prisma.notes.delete({ where: { id } });
+
+    // Eliminamos los archivos físicos asociados
+    for (const img of existing.images) {
+      await deletePhysicalFile(img.name);
+    }
+
     return true;
   },
 
@@ -185,15 +211,36 @@ export const noteMutations = {
         extensions: { code: 'NOT_FOUND' },
       });
     }
+    
+    // 1. Borrar de la BD
     await prisma.images.delete({ where: { id: imageId } });
+    
+    // 2. Borrar del disco
+    await deletePhysicalFile(image.name);
+
     return true;
   },
 
   deleteManyNotes: async (_, { ids }, { prisma }) => {
     if (!ids?.length) return 0;
+
+    // Buscamos las notas con sus imágenes antes de borrarlas
+    const notesToDelete = await prisma.notes.findMany({
+      where: { id: { in: ids } },
+      include: { images: true }
+    });
+
     const result = await prisma.notes.deleteMany({
       where: { id: { in: ids } },
     });
+
+    // Borramos físicamente todas las imágenes de las notas seleccionadas
+    for (const note of notesToDelete) {
+      for (const img of note.images) {
+        await deletePhysicalFile(img.name);
+      }
+    }
+
     return result.count;
   },
 };
