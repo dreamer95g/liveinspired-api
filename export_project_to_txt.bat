@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 :: ================================
 :: 🚀 CONFIGURACIÓN
 :: ================================
-set "TARGET_DIR=C:\Dev\liveinspired"
+set "TARGET_DIR=C:\Dev\liveinspired-api"
 set "OUTPUT_FILE=output_code_api.txt"
 
 echo Borrando archivo anterior...
